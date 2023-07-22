@@ -1,0 +1,62 @@
+< 부저대신 LED로 변경하여 코드를 짬 >
+
+#include <SoftwareSerial.h> 
+
+SoftwareSerial BT(2, 3); // 핀번호 (TX, RX)
+
+int speakerPin = 6; // 스피커 핀 = 6번 핀
+int numTones = 4; // 음 출력 횟수 = 4번
+int ledPin = 8; // LED 핀 = 8번 핀
+
+int tones[] = {392, 415, 392, 415}; // { 4옥솔, 4옥솔#, 4옥솔, 4옥솔# }
+
+void setup() 
+{   
+  // 시리얼 통신을 사용하도록 만드는 함수
+  // 9600의 속도로 통신 (통상적으로 사용하는 속도)
+  // 보드 레이트가 달라지면 폰트 깨짐
+  Serial.begin(9600); 
+  BT.begin(9600); 
+
+  // 각 핀을 출력 모드로
+  pinMode(speakerPin, OUTPUT); // 스피커 핀
+  pinMode(ledPin, OUTPUT); // LED 핀
+} 
+
+void loop() 
+{ 
+  if (BT.available()) 
+  { 
+    char cmd = char(BT.read()); // 핸드폰에서 읽어온 데이터
+
+    // '1'을 입력하면 (작동시키면)
+    if (cmd == '1') 
+    {
+      for(int i = 0; i < numTones; i++)
+      {
+            digitalWrite(speakerPin, HIGH); //tone(speakerPin, tones[i]);대체 // i번째 tone[]의 음을 8번핀을 통해 출력
+            delay(300); // 0.3초 딜레이
+            digitalWrite(ledPin, HIGH); // 8번핀의 입력을 받아 LED 켜기
+            delay(300); // 0.3초 딜레이
+            digitalWrite(speakerPin, LOW); // 6번핀의 입력을 받아 LED 끄기
+            delay(100); // 0.1초 딜레이
+            digitalWrite(ledPin, LOW); // 8번핀의 입력을 받아 LED 끄기
+            delay(100); // 0.1초 딜레이
+
+            // 실행 도중 '2'(중단)를 입력시키면 종료
+            char cmd = char(BT.read());
+            if (cmd == '2')
+              break;
+       }
+
+        //noTone(speakerPin); // 스피커 핀인 6번 핀의 출력을 멈춤
+
+        delay(1000); // 1초 딜레이
+    }
+  } 
+
+  if (Serial.available())
+  { 
+    
+  } 
+}

@@ -1,0 +1,118 @@
+https://steemit.com/kr-arduino/@codingman/mpu-6050 
+https://codeda.tistory.com/116
+	- mpu-6050 참고 웹 사이트
+
+http://www.iamamaker.kr/ko/projects/%EC%95%B1-%EC%9D%B8%EB%B2%A4%ED%84%B0-%EB%B8%94%EB%A3%A8%ED%88%AC%EC%8A%A4%EB%A5%BC-%EC%9E%90%EB%8F%99%EC%9C%BC%EB%A1%9C-%EC%97%B0%EA%B2%B0%ED%95%98%EC%9E%90/
+	- 앱인벤터 블루투스 오픈소스 및 참고
+
+https://kyoungin90.tistory.com/280
+	- I2C통신 참고
+
+https://aia.bizadmin.co.kr/gps-%EC%A2%8C%ED%91%9C%EA%B0%84%EC%9D%98-%EA%B1%B0%EB%A6%AC-%EA%B5%AC%ED%95%98%EA%B8%B0/
+	- 두 좌표간의 gps 거리 값 구하기
+
+https://lamlic36.tistory.com/3
+	- 좌표 값 받아오기
+
+#include <MPU6050_tockn.h>  // MPU-6050라이브러리 사용함 -> 이를 통해 상보필터 값을 계산해 줌
+#include <Wire.h> // I2C 통신을 위한 라이브러리
+#include <SoftwareSerial.h> // 블루투스 통신을 위한 라이브러리
+#include <TinyGPSPlus.h> // GPS 위도, 경도 값을 읽어오기 위한 라이브러리
+
+// 블루투스 모듈은 하드웨어 시리얼로 통신(0, 1)번 핀 사용
+SoftwareSerial gpsSerial(11,12); // GPS를 스프트웨어 시리얼로 통신(11, 12)번 핀 사용
+MPU6050 mpu6050(Wire); //I2C 통신을 통해 MPU6050값 입력 받기
+
+TinyGPSPlus gps; // TinyGPSPlus = gps로 함
+
+int speakerPin = 6; // 스피커 핀 = 6번 핀
+int numTones = 4; // 음 출력 횟수 = 4번
+int ledPin = 8; // LED 핀  8번 핀
+float output[3]; // output[0] = 움직임, output[1] = 위도, output[2] = 경도 값 저장용
+char character[10] = {""}; // \n 인지 구분 및 str에 저장.
+String str = ""; // \n 전까지 character[0] 값을 저장.
+String targetStr = "GPGGA"; // str의 값이 NMEA의 GPGGA 값인지 타겟
+
+int tones[] = {392, 415, 392, 415}; // { 4옥솔, 4옥솔#, 4옥솔, 4옥솔# }
+
+void setup() 
+{
+  // 시리얼 통신을 사용하도록 만드는 함수
+  // 9600의 속도로 통신 (통상적으로 사용하는 속도)
+  // 보드 레이트가 달라지면 시리얼 모니터의 폰트 깨짐
+  Serial.begin(9600); // = 하드웨어 시리얼로 연결한 블루투스 모듈
+  gpsSerial.begin(9600);
+
+  // 각 핀을 출력 모드로
+  pinMode(speakerPin, OUTPUT); // 스피커 핀
+  pinMode(ledPin, OUTPUT); // LED 핀
+  
+  Wire.begin(); // I2C 통신 활성화 
+  mpu6050.begin(); // 각도 변환 활성화
+  mpu6050.calcGyroOffsets(true); // 위치 값 계산
+}
+
+void loop() 
+{
+  // mpu6050칩에 가속도센서, 자이로센서가 내장되어 두 개의 방법으로 각도를 계산
+  // 이를 상보필터를 통해 비율을 설정해 가속도를 통한 각도와 자이로(각속도)를 통한 각도의 장점을 취함
+  // 가속도 - 진동에 약하지만 긴시간에 정확한 값
+  // 자이로 - 진동에 강해서 짧은 시간에 정확한 값을 얻지만 오차가 쌓여서 긴시간에 취약
+  // 상보 필터 : filtered_angle = (0.02 * accel) + (0.98 * gyro) (이 코드에 적용된 식)
+  mpu6050.update(); // 각도 변화 갱신
+  float angle_x = mpu6050.getAngleX(); //x축 각도 변화
+  float angle_y = mpu6050.getAngleY(); //y축 각도 변화
+  float angle_z = mpu6050.getAngleZ(); //z축 각도 변화
+
+  if (Serial.available()) 
+  { 
+    char cmd = char(Serial.read()); // 핸드폰에서 읽어온 데이터
+
+    // 전원 버튼을 통해 보낸 신호 값 '1'을 받으면
+    if (cmd == '1') 
+    {
+      for(int i = 0; i < numTones; i++) 
+      {
+          tone(speakerPin, tones[i]); // i번째 tone[]의 음을 8번핀을 통해 출력
+          delay(300); // 0.3초 딜레이
+          digitalWrite(speakerPin, LOW); // 8번핀의 입력을 받아 LED 끄기
+          delay(100); // 0.1초 딜레이
+          digitalWrite(ledPin, HIGH); // 8번핀의 입력을 받아 LED 켜기
+          delay(300); // 0.3초 딜레이
+          digitalWrite(ledPin, LOW); // 8번핀의 입력을 받아 LED 끄기
+          delay(100); // 0.1초 딜레이
+
+          // 실행 도중 전원 버튼을 통해 보낸 신호 값 '1'을 받으면 부저 및 LED 종료
+          char cmd = char(Serial.read());
+          if (cmd == '2')
+            break;
+       }
+        noTone(speakerPin); // 스피커 핀인 6번 핀의 출력을 멈춤
+
+        delay(200); // 0.2초 딜레이
+     }
+  }
+    // 각 각도가 -45도나 45도를 넘어가면 움직임 값 조정
+    if ( angle_x > 45 || angle_x < -45 || angle_y > 45 || angle_y < -45 || angle_z > 45 || angle_z < -45 )
+      output[0] = 45; 
+    else
+      output[0] = 0; 
+
+    // gps의 값을 읽어오기
+    while(gpsSerial.available())
+    {
+      gps.encode(gpsSerial.read());
+    }
+    // gps의 위치가 업데이트되면
+    if(gps.location.isUpdated())
+    {
+      output[1] = gps.location.lat(); // 위도 값
+      output[2] = gps.location.lng(); // 경도 값
+    }
+      // Start,(45 or 0),(위도 값(소수점 5자리까지)),(경도 값(소수점 5자리까지)),Stop 형태로 출력
+      String data = String("Start")+","+String(output[0])+","+String(output[1],5)+
+                    ","+String(output[2],5)+","+String("Stop");
+                    
+      Serial.println(data); // data를 블루투스 모듈에 출력
+      delay(100); // 딜레이 0.1
+}
